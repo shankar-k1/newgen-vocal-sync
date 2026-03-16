@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
+    "dev:all": "concurrently \"npm run dev\" \"npm run tunnel\"",
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "eslint",
@@ -30,6 +31,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "ngrok": "^5.0.0-beta.2",

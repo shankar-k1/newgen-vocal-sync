@@ -169,16 +169,46 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setThemeState(key);
         localStorage.setItem("admin-theme", key);
         const c = themes[key];
-        document.documentElement.style.setProperty("--primary", c.primary);
-        document.documentElement.style.setProperty("--secondary", c.secondary);
-        document.documentElement.style.setProperty("--accent", c.accent);
+        const root = document.documentElement;
+        
+        root.style.setProperty("--primary", c.primary);
+        root.style.setProperty("--secondary", c.secondary);
+        root.style.setProperty("--accent", c.accent);
+        root.style.setProperty("--bg-primary", c.bg);
+        root.style.setProperty("--bg-card", c.bgCard);
+        root.style.setProperty("--text-primary", c.textPrimary);
+        root.style.setProperty("--text-secondary", c.textSecondary);
+        root.style.setProperty("--text-muted", c.textMuted);
+        root.style.setProperty("--line", c.border);
+        root.style.setProperty("--input-bg", c.inputBg);
+        
+        if (c.isDark) {
+            root.classList.add("dark");
+        } else {
+            root.classList.remove("dark");
+        }
     };
 
     useEffect(() => {
         const c = themes[theme];
-        document.documentElement.style.setProperty("--primary", c.primary);
-        document.documentElement.style.setProperty("--secondary", c.secondary);
-        document.documentElement.style.setProperty("--accent", c.accent);
+        const root = document.documentElement;
+        
+        root.style.setProperty("--primary", c.primary);
+        root.style.setProperty("--secondary", c.secondary);
+        root.style.setProperty("--accent", c.accent);
+        root.style.setProperty("--bg-primary", c.bg);
+        root.style.setProperty("--bg-card", c.bgCard);
+        root.style.setProperty("--text-primary", c.textPrimary);
+        root.style.setProperty("--text-secondary", c.textSecondary);
+        root.style.setProperty("--text-muted", c.textMuted);
+        root.style.setProperty("--line", c.border);
+        root.style.setProperty("--input-bg", c.inputBg);
+        
+        if (c.isDark) {
+            root.classList.add("dark");
+        } else {
+            root.classList.remove("dark");
+        }
     }, [theme]);
 
     return (

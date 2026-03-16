@@ -32,12 +32,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Deepgram API key not configured. Update in Admin Panel or .env file." }, { status: 401 });
       }
 
+      let contentType = file.type;
+      if (!contentType || contentType === "application/octet-stream") {
+        if (file.name.endsWith(".wav")) contentType = "audio/wav";
+        else if (file.name.endsWith(".mp3")) contentType = "audio/mpeg";
+        else if (file.name.endsWith(".m4a")) contentType = "audio/mp4";
+        else if (file.name.endsWith(".ogg")) contentType = "audio/ogg";
+        else contentType = "audio/mpeg"; // Default
+      }
+
       // Use Deepgram REST API directly for reliability
       const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&detect_language=true", {
         method: "POST",
         headers: {
           "Authorization": `Token ${apiKey}`,
-          "Content-Type": file.type || "audio/mpeg",
+          "Content-Type": contentType,
         },
         body: buffer,
       });
@@ -48,13 +57,37 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Deepgram error: ${response.status} - ${errBody}` }, { status: response.status });
       }
 
-      const result = await response.json();
+      let result = await response.json();
+      console.log(`[STT] Deepgram Result (initial):`, JSON.stringify(result, null, 2));
 
-      const transcript = result?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
-      const detectedLang = result?.results?.channels?.[0]?.detected_language || "en";
+      let transcript = result?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+      let detectedLang = result?.results?.channels?.[0]?.detected_language || "en";
 
+      // Fallback: If no transcript, try a simpler request without language detection/smart format
       if (!transcript) {
-        return NextResponse.json({ error: "No transcript could be generated from this audio." }, { status: 422 });
+        console.warn("[STT] No transcript with advanced features, retrying with basic settings...");
+        const fallbackResponse = await fetch("https://api.deepgram.com/v1/listen?model=nova-2", {
+          method: "POST",
+          headers: {
+            "Authorization": `Token ${apiKey}`,
+            "Content-Type": contentType,
+          },
+          body: buffer,
+        });
+
+        if (fallbackResponse.ok) {
+          result = await fallbackResponse.json();
+          console.log(`[STT] Deepgram Result (fallback):`, JSON.stringify(result, null, 2));
+          transcript = result?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+        }
+      }
+
+      if (!transcript || transcript.trim() === "") {
+        console.warn("[STT] Deepgram returned no transcript for file:", file.name);
+        return NextResponse.json({ 
+          error: "No transcript could be generated. This often happens with very short audio, silence, or low volume.",
+          details: "Try a different STT engine (like Groq or AssemblyAI) or ensure the audio quality is clear."
+        }, { status: 422 });
       }
 
       return NextResponse.json({ text: transcript, language: detectedLang });

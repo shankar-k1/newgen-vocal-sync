@@ -3,8 +3,11 @@ import axios from "axios";
 import { getSetting } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
+  let engine = "unknown";
   try {
-    const { text, targetLang, engine, voiceId } = await req.json();
+    const body = await req.json();
+    const { text, targetLang, voiceId } = body;
+    engine = body.engine || "unknown";
 
     if (!text) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
@@ -154,9 +157,29 @@ export async function POST(req: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error("[TTS] Error:", error.response?.status, error.message);
+    const status = error.response?.status || 500;
+    const responseData = error.response?.data;
+    let detail = "";
+    if (responseData) {
+      if (typeof responseData === "string") {
+        detail = responseData;
+      } else if (Buffer.isBuffer(responseData) || responseData instanceof ArrayBuffer) {
+        try { detail = Buffer.from(responseData).toString("utf-8").substring(0, 500); } catch {}
+      } else {
+        detail = JSON.stringify(responseData).substring(0, 500);
+      }
+    }
+    console.error(`[TTS] Error (${status}):`, error.message, detail ? `\nResponse: ${detail}` : "");
+    
+    const errorMessage = error.response?.data?.detail?.message 
+      || error.response?.data?.error 
+      || error.response?.data?.message
+      || error.message 
+      || "TTS generation failed";
+    
     return NextResponse.json({
-      error: error.response?.data?.detail?.message || error.message || "TTS generation failed"
+      error: `TTS Error (${engine || "unknown"}): ${errorMessage}`,
+      details: detail || undefined
     }, { status: 500 });
   }
 }
