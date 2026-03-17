@@ -42,10 +42,10 @@ type ProcessedResult = {
 
 type FfmpegLike = {
   on: (event: "progress", callback: ({ progress }: { progress: number }) => void) => void;
-  load: (config: { coreURL: string; wasmURL: string }) => Promise<void>;
-  writeFile: (path: string, data: Uint8Array) => Promise<void>;
-  exec: (args: string[]) => Promise<void>;
-  readFile: (path: string) => Promise<Uint8Array>;
+  load: (config: { coreURL: string; wasmURL: string }) => Promise<any>;
+  writeFile: (path: string, data: any) => Promise<any>;
+  exec: (args: string[]) => Promise<any>;
+  readFile: (path: string) => Promise<any>;
 };
 
 const LANGUAGES = [
@@ -368,6 +368,8 @@ export default function AudioApp() {
 
       const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
       const ffmpeg = ffmpegRef.current;
+      if (!ffmpeg) return;
+
       ffmpeg.on("progress", ({ progress }: { progress: number }) => {
         setConversionProgress(Math.round(progress * 100));
       });
@@ -416,14 +418,15 @@ export default function AudioApp() {
 
     setIsConvertingOutput(true);
     const ffmpeg = ffmpegRef.current;
+    if (!ffmpeg) return;
 
     try {
       const response = await fetch(result.outputUrl);
-      const audioBlob = await response.blob();
+      const inputBlob = await response.blob();
       const inputName = `input_${result.id}.mp3`;
       const outputName = `output_${result.id}.${outputFormat}`;
 
-      await ffmpeg.writeFile(inputName, await fetchFile(audioBlob));
+      await ffmpeg.writeFile(inputName, await fetchFile(inputBlob));
       const ffmpegArgs = ["-i", inputName, "-ar", sampleRate, "-ac", audioChannels];
 
       if (outputFormat === "wav") ffmpegArgs.push("-acodec", wavCodec);
@@ -434,7 +437,8 @@ export default function AudioApp() {
 
       await ffmpeg.exec(ffmpegArgs);
       const data = await ffmpeg.readFile(outputName);
-      const url = URL.createObjectURL(new Blob([data.buffer], { type: `audio/${outputFormat}` }));
+      const outputBlob = new Blob([data.buffer || data], { type: `audio/${outputFormat}` });
+      const url = URL.createObjectURL(outputBlob);
       const anchor = document.createElement("a");
       const langName = LANGUAGES.find((language) => language.code === targetLang)?.name || targetLang;
 
@@ -451,12 +455,16 @@ export default function AudioApp() {
 
     setIsProcessing(true);
     setErrorMsg("");
+    // We don't clear results here if we want to show incremental updates, 
+    // but the current logic clears them. Let's stick to current behavior for now.
     setProcessedResults([]);
 
-    for (let index = 0; index < files.length; index += 1) {
-      const currentFile = files[index];
-      setProcessingIndex(index);
+    const concurrency = 2;
+    const queue = files.map((file, index) => ({ file, index }));
+    const totalFiles = files.length;
+    let completedCount = 0;
 
+    const processFile = async (currentFile: File, index: number) => {
       try {
         setProcessingStep(`Transcribing ${currentFile.name}...`);
         const formData = new FormData();
@@ -510,9 +518,23 @@ export default function AudioApp() {
             ? data.error
             : data?.error?.message || (error instanceof Error ? error.message : "Unknown error");
         const details = data?.details ? ` - ${data.details}` : "";
-        setErrorMsg(`Failed to process ${currentFile.name}: ${errMsg}${details}`);
+        setErrorMsg((prev) => (prev ? `${prev}\n` : "") + `Failed to process ${currentFile.name}: ${errMsg}${details}`);
+      } finally {
+        completedCount++;
+        setProcessingIndex(completedCount); // Reusing as progress indicator
       }
-    }
+    };
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const item = queue.shift();
+        if (!item) break;
+        await processFile(item.file, item.index);
+      }
+    };
+
+    const workers = Array.from({ length: Math.min(concurrency, files.length) }, worker);
+    await Promise.all(workers);
 
     setIsProcessing(false);
     setProcessingIndex(-1);

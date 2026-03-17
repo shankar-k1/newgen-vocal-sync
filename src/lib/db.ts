@@ -28,13 +28,18 @@ if (!fs.existsSync(DB_PATH)) {
     fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2));
 }
 
+let cachedDb: any = null;
+
 export const getDb = () => {
+    if (cachedDb) return cachedDb;
     const data = fs.readFileSync(DB_PATH, 'utf-8');
-    return JSON.parse(data);
+    cachedDb = JSON.parse(data);
+    return cachedDb;
 };
 
 export const saveDb = (data: any) => {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+    cachedDb = data;
 };
 
 export const getSetting = (key: string) => {
